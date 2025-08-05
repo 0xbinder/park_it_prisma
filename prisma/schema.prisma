@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum ReservedSlotStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum UserRole {
+  ADMIN
+  PARTNER
+  CUSTOMER
+}
+
+enum NotificationType {
+  ADMIN
+  PARTNER
+  CUSTOMER
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  MPESA
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  ABANDONED
+  REFUNDED
+  CANCELLED
+}
+
+model User {
+  id            String     @id @default(uuid()) @db.Uuid
+  email         String?    @unique
+  full_name     String?
+  phone_number  String?
+  avatar_url    String?
+  date_of_birth DateTime?
+  gender        String?
+  fcm_token     String?
+  national_id   String?
+  role          UserRole   @default(CUSTOMER)
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+  Partner       Partner[]
+  Customer      Customer[]
+
+  @@index([email])
+  @@map("user_accounts")
+}
+
+model Partner {
+  partner_id  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String        @db.Uuid
+  user        User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  ParkingSlot ParkingSlot[]
+  Payment     Payment[]
+
+  @@index([user_id])
+  @@map("partners")
+}
+
+model Customer {
+  customer_id  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String         @db.Uuid
+  user         User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  ReservedSlot ReservedSlot[]
+  Payment      Payment[]
+
+  @@index([user_id])
+  @@map("customers")
+}
+
+model ParkingSlot {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  partner_id      String         @db.Uuid
+  location_name   String
+  latitude        Float?
+  longitude       Float?
+  price           Int
+  number_of_slots Int
+  payment_method  PaymentMethod  @default(MPESA)
+  image_url       String?
+  description     String?
+  title           String
+  partner         Partner        @relation(fields: [partner_id], references: [partner_id], onDelete: Cascade)
+  reserved_slot   ReservedSlot[]
+
+  @@index([partner_id])
+  @@map("parking_slots")
+}
+
+model ReservedSlot {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parking_slot_id String             @db.Uuid
+  parking_slot    ParkingSlot        @relation(fields: [parking_slot_id], references: [id], onDelete: Cascade)
+  customer_id     String             @db.Uuid
+  customer        Customer           @relation(fields: [customer_id], references: [customer_id], onDelete: Cascade)
+  status          ReservedSlotStatus @default(PENDING)
+  created_at      DateTime           @default(now())
+  updated_at      DateTime           @updatedAt
+  Payment         Payment[]
+
+  @@index([parking_slot_id])
+  @@map("reserved_slots")
+}
+
+model Payment {
+  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reserved_slot_id     String?       @db.Uuid
+  reserved_slot        ReservedSlot? @relation(fields: [reserved_slot_id], references: [id])
+  customer_id          String        @db.Uuid
+  customer             Customer      @relation(fields: [customer_id], references: [customer_id], onDelete: Cascade)
+  partner_id           String?       @db.Uuid
+  partner              Partner?      @relation(fields: [partner_id], references: [partner_id])
+  amount               Int
+  currency             String        @default("KES")
+  payment_method       PaymentMethod
+  status               PaymentStatus @default(PENDING)
+  transaction_ref      String        @unique
+  paid_at              DateTime?
+  created_at           DateTime      @default(now())
+  updated_at           DateTime      @updatedAt
+
+  @@index([reserved_slot_id])
+  @@index([customer_id])
+  @@index([partner_id])
+  @@index([transaction_ref])
+  @@map("payments")
+}
